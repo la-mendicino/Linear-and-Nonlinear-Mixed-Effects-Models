@@ -1,0 +1,165 @@
+---
+title: "orthodont"
+author: "Lucas Mendicino"
+date: "10/30/2021"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+
+
+```{r}
+library(dplyr)
+library(nlme)
+library(ggplot2)
+
+library(sjPlot)
+library(sjlabelled)
+library(sjmisc)
+theme_set(theme_sjplot())
+```
+
+
+```{r}
+summary(Orthodont)
+View(Orthodont)
+```
+
+
+```{r}
+Orthodont %>% group_by(age, Sex) %>% summarise(mean_distance = mean(distance), sd_distance = sd(distance))
+
+```
+
+```{r}
+baseline <- Orthodont %>% filter(age == "8")
+ggplot(baseline, aes(x=distance)) + geom_histogram() + facet_grid(vars(Sex))
+
+```
+```{r}
+baseline_male <- Orthodont %>% filter(age == "8", Sex == "Male")
+baseline_female <- Orthodont %>% filter(age == "8", Sex == "Female")
+
+wilcox.test(baseline_male$distance, baseline_female$distance, alternative = "two.sided", confint = TRUE)
+
+```
+
+```{r}
+plot <- ggplot(Orthodont, aes(x = age, y = distance)) + geom_point(color = "red") 
+plot
+```
+```{r}
+lm1 <- lm(distance ~ (age), data = Orthodont)
+summary(lm1)
+```
+
+```{r}
+plot + geom_line(aes(x=age,y=predict(lm1)))
+```
+
+```{r}
+lm2 <- lm(distance ~ age + Sex, data = Orthodont)
+summary(lm2)
+```
+
+```{r}
+plot_model(lm2, type = c("pred"), terms = c("age", "Sex")) + geom_line()
+plot + geom_line(aes(x=age,y=predict(lm2))) + facet_grid(.~Sex)
+```
+```{r}
+lm3 <- lm(distance ~ age:Sex, data = Orthodont)
+summary(lm3)
+```
+
+```{r}
+plot_model(lm3, type = c("pred"), terms = c("age", "Sex")) + geom_line()
+plot + geom_line(aes(x=age,y=predict(lm3))) + facet_grid(.~Sex)
+```
+```{r}
+lm4 <- lm(distance ~ age:Sex + Sex, data = Orthodont)
+summary(lm4)
+```
+
+```{r}
+plot_model(lm4, type = c("pred"), terms = c("age", "Sex")) + geom_line()
+plot + geom_line(aes(x=age,y=predict(lm4))) + facet_grid(.~Sex)
+```
+
+```{r}
+lm4 <- lm(distance ~ age:Sex + Sex, data = Orthodont)
+summary(lm4)
+```
+
+lm3 the best
+```{r}
+BIC(lm1,lm2,lm3, lm4)
+
+```
+
+```{r}
+Subject.select <- c(paste0("M0",5:8),paste0("F0",2:5))
+Orthodont.select <- subset(Orthodont,Subject %in% Subject.select)
+ggplot(data=Orthodont.select) + geom_point(aes(x=age,y=distance), color="red", size=3) + 
+  geom_line(aes(x=age,y=predict(lm3,newdata=Orthodont.select))) + facet_wrap(~Subject, nrow=2)
+```
+model doesn't fit the data that well
+
+```{r}
+ggplot(data=Orthodont) + geom_point(aes(x=age,y=distance), color="red", size=3)  + 
+  geom_line(aes(x=age,y=distance,group=Subject))
+
+```
+
+Let's run a linear mixed effects model that assumes the birth distance and the growth rate (i.e. the intercept and the slope) may depend on the individual
+
+
+```{r}
+library(lme4)
+library(nlme)
+```
+```{r}
+lmm1 <- lmer(distance ~ age + (age|Subject), data = Orthodont)
+summary(lmm1)
+```
+
+```{r}
+Orthodont$pred.lmm1 <- fitted(lmm1)
+ggplot(data=subset(Orthodont,Subject %in% Subject.select)) + geom_point(aes(x=age,y=distance), color="red", size=3) + 
+  geom_line(aes(x=age,y=pred.lmm1)) + facet_wrap(~Subject, ncol=4) 
+
+```
+
+
+```{r}
+lmm1a <- lme(fixed = distance ~ age, random = ~ age | Subject, data = Orthodont)
+summary(lmm1a)
+```
+
+```{r}
+Orthodont$pred.lmm1a <- fitted(lmm1a)
+ggplot(data=subset(Orthodont,Subject %in% Subject.select)) + geom_point(aes(x=age,y=distance), color="red", size=3) + 
+  geom_line(aes(x=age,y=pred.lmm1a)) + facet_wrap(~Subject, ncol=4) 
+
+```
+
+
+
+
+
+
+
+
+
