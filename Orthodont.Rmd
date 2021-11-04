@@ -9,19 +9,10 @@ output: github_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## R Markdown
-
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
-```
 
 
 
-```{r}
+```{r, messages = FALSE}
 library(dplyr)
 library(nlme)
 library(ggplot2)
@@ -32,23 +23,27 @@ library(sjmisc)
 theme_set(theme_sjplot())
 ```
 
+The Orthodont dataset has 108 rows and 4 columns of the change in an orthdontic measurement over time for several young subjects.
 
+Investigators at the University of North Carolina Dental School followed the growth of 27 children (16 males, 11 females) from age 8 until age 14. Every two years they measured the distance between the pituitary and the pterygomaxillary fissure, two points that are easily identified on x-ray exposures of the side of the head.
+
+Let's explore the dataset:
 ```{r}
 summary(Orthodont)
-View(Orthodont)
+str(Orthodont)
 ```
 
 
-```{r}
+```{r, messages = FALSE}
 Orthodont %>% group_by(age, Sex) %>% summarise(mean_distance = mean(distance), sd_distance = sd(distance))
-
 ```
-
+Let's look at the baseline measurements:
 ```{r}
 baseline <- Orthodont %>% filter(age == "8")
-ggplot(baseline, aes(x=distance)) + geom_histogram() + facet_grid(vars(Sex))
-
+ggplot(baseline, aes(x=distance)) + geom_histogram(bins = 40) + facet_grid(vars(Sex))
 ```
+
+It looks like females had smaller distances at baseline compared to males. Let's compare the distributions with a Mann-Whitney Test:
 ```{r}
 baseline_male <- Orthodont %>% filter(age == "8", Sex == "Male")
 baseline_female <- Orthodont %>% filter(age == "8", Sex == "Female")
@@ -57,10 +52,14 @@ wilcox.test(baseline_male$distance, baseline_female$distance, alternative = "two
 
 ```
 
+
+Let's visualize the distances at each age:
 ```{r}
 plot <- ggplot(Orthodont, aes(x = age, y = distance)) + geom_point(color = "red") 
 plot
 ```
+
+Let's run a simple linear model to measure the relationship between distance and age:
 ```{r}
 lm1 <- lm(distance ~ (age), data = Orthodont)
 summary(lm1)
@@ -71,6 +70,14 @@ plot + geom_line(aes(x=age,y=predict(lm1)))
 ```
 
 ```{r}
+plot + geom_line(aes(x=age,y=predict(lm1))) + facet_grid(.~Sex)
+```
+
+We can see that age is a significant predictor of distance. Yet, when we plot our fitted line separately for males and females, we see that we overestimate for females and underestimate for males.
+
+Let's run another regression model with Sex as a predictor; males and females will have the same slope, but different intercepts:
+
+```{r}
 lm2 <- lm(distance ~ age + Sex, data = Orthodont)
 summary(lm2)
 ```
@@ -79,6 +86,8 @@ summary(lm2)
 plot_model(lm2, type = c("pred"), terms = c("age", "Sex")) + geom_line()
 plot + geom_line(aes(x=age,y=predict(lm2))) + facet_grid(.~Sex)
 ```
+
+Let's run another model considering the same intercept for males and females, but different slopes
 ```{r}
 lm3 <- lm(distance ~ age:Sex, data = Orthodont)
 summary(lm3)
@@ -88,6 +97,8 @@ summary(lm3)
 plot_model(lm3, type = c("pred"), terms = c("age", "Sex")) + geom_line()
 plot + geom_line(aes(x=age,y=predict(lm3))) + facet_grid(.~Sex)
 ```
+
+Let's combine the previous two models, now having different intercepts and slopes for males and females
 ```{r}
 lm4 <- lm(distance ~ age:Sex + Sex, data = Orthodont)
 summary(lm4)
@@ -98,17 +109,14 @@ plot_model(lm4, type = c("pred"), terms = c("age", "Sex")) + geom_line()
 plot + geom_line(aes(x=age,y=predict(lm4))) + facet_grid(.~Sex)
 ```
 
-```{r}
-lm4 <- lm(distance ~ age:Sex + Sex, data = Orthodont)
-summary(lm4)
-```
 
 lm3 the best
 ```{r}
 BIC(lm1,lm2,lm3, lm4)
-
+AIC(lm1,lm2,lm3, lm4)
 ```
 
+Let's see how our best model fits the data:
 ```{r}
 Subject.select <- c(paste0("M0",5:8),paste0("F0",2:5))
 Orthodont.select <- subset(Orthodont,Subject %in% Subject.select)
@@ -155,7 +163,13 @@ ggplot(data=subset(Orthodont,Subject %in% Subject.select)) + geom_point(aes(x=ag
 
 ```
 
-
+```{r}
+plot(ranef(lmm1a))
+res <- residuals(lmm1a)
+plot(res)
+qqnorm(res)
+qqline(res)
+```
 
 
 
