@@ -1,2 +1,2 @@
-# Linear-and-Nonlinear-Mixed-Effects-Models-with-nlme
-Using the Orthodont dataset from the nlme package, I explore the need for mixed effects models
+# Linear-and-Nonlinear-Mixed-Effects-Models
+This repository provides examples of mixed effects models in R using the lme4 and nlme packages.
