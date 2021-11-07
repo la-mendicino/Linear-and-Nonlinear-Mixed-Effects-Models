@@ -1,5 +1,5 @@
 ---
-title: "orthodont"
+title: "Linear Mixed Effect Models with the Orthodont Dataset"
 author: "Lucas Mendicino"
 date: "10/30/2021"
 output: github_document
@@ -9,21 +9,20 @@ output: github_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+# Setup
 
-
-
-```{r, messages = FALSE}
+```{r, include = TRUE, message = FALSE}
 library(dplyr)
-library(nlme)
 library(ggplot2)
-
+library(lme4)
+library(nlme)
 library(sjPlot)
-library(sjlabelled)
-library(sjmisc)
-theme_set(theme_sjplot())
+
 ```
 
-The Orthodont dataset has 108 rows and 4 columns of the change in an orthdontic measurement over time for several young subjects.
+# Exploration
+
+The Orthodont dataset has 108 rows and 4 columns of the change in an orthodontic measurement over time for several young subjects.
 
 Investigators at the University of North Carolina Dental School followed the growth of 27 children (16 males, 11 females) from age 8 until age 14. Every two years they measured the distance between the pituitary and the pterygomaxillary fissure, two points that are easily identified on x-ray exposures of the side of the head.
 
@@ -33,10 +32,18 @@ summary(Orthodont)
 str(Orthodont)
 ```
 
+```{r}
+plot(Orthodont)
+```
 
 ```{r, messages = FALSE}
-Orthodont %>% group_by(age, Sex) %>% summarise(mean_distance = mean(distance), sd_distance = sd(distance))
+Orthodont %>% group_by(age) %>% summarise(mean_distance = mean(distance), sd_distance = sd(distance))
 ```
+
+```{r, messages = FALSE}
+Orthodont %>% group_by(Sex) %>% summarise(mean_distance = mean(distance), sd_distance = sd(distance))
+```
+
 Let's look at the baseline measurements:
 ```{r}
 baseline <- Orthodont %>% filter(age == "8")
@@ -44,20 +51,21 @@ ggplot(baseline, aes(x=distance)) + geom_histogram(bins = 40) + facet_grid(vars(
 ```
 
 It looks like females had smaller distances at baseline compared to males. Let's compare the distributions with a Mann-Whitney Test:
-```{r}
+```{r, messages = FALSE}
 baseline_male <- Orthodont %>% filter(age == "8", Sex == "Male")
 baseline_female <- Orthodont %>% filter(age == "8", Sex == "Female")
 
 wilcox.test(baseline_male$distance, baseline_female$distance, alternative = "two.sided", confint = TRUE)
-
 ```
 
 
 Let's visualize the distances at each age:
 ```{r}
-plot <- ggplot(Orthodont, aes(x = age, y = distance)) + geom_point(color = "red") 
+plot <- ggplot(Orthodont, aes(x = age, y = distance)) + geom_point(color = "blue") 
 plot
 ```
+
+# Linear Models using lm()
 
 Let's run a simple linear model to measure the relationship between distance and age:
 ```{r}
@@ -83,7 +91,6 @@ summary(lm2)
 ```
 
 ```{r}
-plot_model(lm2, type = c("pred"), terms = c("age", "Sex")) + geom_line()
 plot + geom_line(aes(x=age,y=predict(lm2))) + facet_grid(.~Sex)
 ```
 
@@ -94,7 +101,6 @@ summary(lm3)
 ```
 
 ```{r}
-plot_model(lm3, type = c("pred"), terms = c("age", "Sex")) + geom_line()
 plot + geom_line(aes(x=age,y=predict(lm3))) + facet_grid(.~Sex)
 ```
 
@@ -105,71 +111,143 @@ summary(lm4)
 ```
 
 ```{r}
-plot_model(lm4, type = c("pred"), terms = c("age", "Sex")) + geom_line()
 plot + geom_line(aes(x=age,y=predict(lm4))) + facet_grid(.~Sex)
 ```
 
-
-lm3 the best
+Let's compare information criterion for our 4 linear models to see which best fits the data.
 ```{r}
 BIC(lm1,lm2,lm3, lm4)
 AIC(lm1,lm2,lm3, lm4)
 ```
+The third linear model, with same intercept for males and females but different slopes, had the lowest BIC and AIC.
 
-Let's see how our best model fits the data:
+
+Let's see how our model fits our data for a few participants
 ```{r}
-Subject.select <- c(paste0("M0",5:8),paste0("F0",2:5))
-Orthodont.select <- subset(Orthodont,Subject %in% Subject.select)
-ggplot(data=Orthodont.select) + geom_point(aes(x=age,y=distance), color="red", size=3) + 
-  geom_line(aes(x=age,y=predict(lm3,newdata=Orthodont.select))) + facet_wrap(~Subject, nrow=2)
-```
-model doesn't fit the data that well
+subjects <- c(paste0("M0",1:4),paste0("F0",1:4))
+Orthodont.subset<- subset(Orthodont,Subject %in% subjects)
+ggplot(data = Orthodont.subset) + geom_point(aes(x = age, y = distance), color = "blue", size = 3) + 
+  geom_line(aes(x = age, y = predict(lm3, newdata = Orthodont.subset))) + facet_wrap(~Subject, nrow = 2)
+``` 
+The best model does not fit the data that well. Some participants are overestimated or underestimated.
 
+Let's view a spagehtti plot to see how distances change over time.
 ```{r}
-ggplot(data=Orthodont) + geom_point(aes(x=age,y=distance), color="red", size=3)  + 
-  geom_line(aes(x=age,y=distance,group=Subject))
-
-```
-
-Let's run a linear mixed effects model that assumes the birth distance and the growth rate (i.e. the intercept and the slope) may depend on the individual
-
-
-```{r}
-library(lme4)
-library(nlme)
+ggplot(data = Orthodont) + geom_point(aes(x = age, y = distance), color = "blue", size = 3)  + 
+  geom_line(aes(x = age, y = distance, group = Subject))
 ```
 ```{r}
-lmm1 <- lmer(distance ~ age + (age|Subject), data = Orthodont)
+ggplot(data = Orthodont) + geom_point(aes(x = age, y = distance), color = "blue", size = 3)  + 
+  geom_line(aes(x = age, y = distance, group = Subject)) + facet_grid(~Sex)
+```
+
+It can be seen that many participants have a nonlinear change in distance as they got older. They seem to grow at different rates and start at different distances too. The linear model is not complex enough to pickup on these effects. Even when we look within the same sex group, we see participant's slopes and intercepts changing even though the distance seems to increase linearly.
+
+We need to extend our model to take into account variability seen in individuals.
+
+# Linear Mixed Effect Model
+
+Expanding our linear model to include mixed effects will allow us to consider inter-individual variability in the outcome variable distance. 
+
+Let's first run a linear mixed effect model expanding our first linear model to allow for random variability in the intercept for each subject.
+
+```{r}
+lmm1 <- lmer(distance ~ age + (1|Subject), data = Orthodont)
 summary(lmm1)
 ```
 
 ```{r}
 Orthodont$pred.lmm1 <- fitted(lmm1)
-ggplot(data=subset(Orthodont,Subject %in% Subject.select)) + geom_point(aes(x=age,y=distance), color="red", size=3) + 
-  geom_line(aes(x=age,y=pred.lmm1)) + facet_wrap(~Subject, ncol=4) 
+ggplot(data = subset(Orthodont, Subject %in% subjects)) + geom_point(aes(x = age, y = distance), color = "blue", size = 3) + 
+  geom_line(aes(x = age, y = pred.lmm1)) + facet_wrap(~ Subject, ncol = 4) 
+```
 
+Let's add the interaction between age and sex as a fixed effect and allow the random effects for the intercepts (fixed slopes for male and females, random intercepts).
+
+```{r}
+lmm2 <- lmer(distance ~ age:Sex + (1|Subject), data = Orthodont)
+summary(lmm2)
 ```
 
 
 ```{r}
-lmm1a <- lme(fixed = distance ~ age, random = ~ age | Subject, data = Orthodont)
-summary(lmm1a)
+Orthodont$pred.lmm2 <- fitted(lmm2)
+ggplot(data = subset(Orthodont, Subject %in% subjects)) + geom_point(aes(x = age, y = distance), color = "blue", size = 3) + 
+  geom_line(aes(x = age, y = pred.lmm2)) + facet_wrap(~ Subject, ncol = 4) 
+```
+
+Now, let's expand the last model. We keep the age, Sex interaction as a fixed effect and introduce a random effect such that intercepts (birth distance) and slopes (growth rate) depend on the subject.
+
+```{r}
+lmm3 <- lmer(distance ~ age:Sex + (age|Subject), data = Orthodont)
+summary(lmm3)
 ```
 
 ```{r}
-Orthodont$pred.lmm1a <- fitted(lmm1a)
-ggplot(data=subset(Orthodont,Subject %in% Subject.select)) + geom_point(aes(x=age,y=distance), color="red", size=3) + 
-  geom_line(aes(x=age,y=pred.lmm1a)) + facet_wrap(~Subject, ncol=4) 
+Orthodont$pred.lmm3 <- fitted(lmm3)
+ggplot(data = subset(Orthodont, Subject %in% subjects)) + geom_point(aes(x = age, y = distance), color = "blue", size = 3) + 
+  geom_line(aes(x = age, y = pred.lmm3)) + facet_wrap(~ Subject, ncol = 4) 
+```
 
+Let's now assume same birth distances for all individuals, but different growth rates for individuals of the same Sex.
+```{r}
+lmm4 <- lmer(distance ~ age:Sex + (-1 + age|Subject), data = Orthodont)
+summary(lmm4)
+```
+
+
+```{r}
+Orthodont$pred.lmm4 <- fitted(lmm4)
+ggplot(data = subset(Orthodont, Subject %in% subjects)) + geom_point(aes(x = age, y = distance), color = "blue", size = 3) + 
+  geom_line(aes(x = age, y = pred.lmm4)) + facet_wrap(~ Subject, ncol = 4) 
+```
+
+
+Let's compare information criterion for our linear models and linear mixed effects models:
+
+```{r}
+BIC(lm1, lm2, lm3, lm4, lmm1, lmm2, lmm3, lmm4)
+AIC(lm1, lm2, lm3, lm4, lmm1, lmm2, lmm3, lmm4)
+```
+
+We see the second linear mixed effect model, assuming different fixed effects for males and females and a random intercept, best predicts distance.
+
+```{r}
+Orthodont$pred.final <- fitted(lmm2)
+ggplot(data = Orthodont) + geom_point(aes(x = age, y = distance), color = "blue", size = 3) + 
+  geom_line(aes(x = age, y = pred.final)) + facet_wrap(~ Subject, ncol = 5) 
 ```
 
 ```{r}
-plot(ranef(lmm1a))
-res <- residuals(lmm1a)
+plot_model(lmm2, type = c("pred"), terms = c("age", "Sex")) 
+```
+
+Let
+
+```{r}
+plot(ranef(lmm3))
+res <- residuals(lmm3)
 plot(res)
 qqnorm(res)
 qqline(res)
 ```
+
+# Use in nlme
+
+The same models can be constructed using the nlme package as well:
+
+```{r}
+lme1 <- lme(fixed = distance ~ age, random = ~ 1 | Subject, data = Orthodont)
+lme2 <- lme(fixed = distance ~ age:Sex, random = ~ 1 | Subject, data = Orthodont)
+lme3 <- lme(fixed = distance ~ age:Sex, random = ~ age | Subject, data = Orthodont)
+lme4 <- lme(fixed = distance ~ age:Sex, random = ~ -1 + age | Subject, data = Orthodont)
+```
+
+
+
+
+
+
 
 
 
